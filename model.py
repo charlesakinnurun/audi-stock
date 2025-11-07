@@ -358,4 +358,331 @@ plt.show()
 print("Top 3 Performing Models:")
 print(results_df.head())
 
+# %% [markdown]
+# Hyperparameter Tuning for the best model
+
+# %%
+# Select the best model based on RMSE
+best_model_name = results_df.iloc[0]["Model"]
+best_model = results[best_model_name]["model"]
+
+print(f"Best Model: {best_model_name}")
+print(f"Initial RMSE: {results[best_model_name]["rmse"]:.4f}")
+print(f"Initial R2 Score: {results[best_model_name]["r2"]:.4f}")
+
+# %%
+# Define hyperparamter grids for different models
+param_grids = {
+    "Random Forest":{
+        "n_estimators":[50,100,200],
+        "max_depth":[None,10,20,30],
+        "min_samples_split":[2,5,10],
+        "min_samples_leaf":[1,2,4]
+    },
+    "Gradient Boosting":{
+        "n_estimators":[50,100,200],
+        "learning_rate":[0.01,0.1,0.2],
+        "max_depth":[3,4,5],
+        "min_samples_split":[2,5]
+    },
+    "Decision Tree":{
+        "max_depth":[None,10,20,30],
+        "min_samples_split":[2,5,10],
+        "min_samples_leaf":[1,2,4]
+    },
+    "Ridge Regression":{
+        "alpha":[0.1,1.0,10.0,100.0]
+    },
+    "Lasso Regression":{
+        "alpha":[0.1,1.0,10.0,100.0]
+    },
+    "ElasticNet":{
+        "alpha":[0.1,1.0,10.0],
+        "l1_ratio":[0.2,0.5,0.8]
+    },
+    "SVR":{
+        "C":[0.1,1,10,100],
+        "gamma":["scale","auto",0.1,0.01],
+        "kernel":["rbf","linear"]
+    },
+    "K-Neighbors":{
+        "n_neighbors":[3,5,7,9,11],
+        "weights":["uniform","distance"],
+        "metric":["euclidean","manhattan"]
+    }
+}
+
+# %%
+# Perform hyperparameter tuning if parameters are defined for the best model
+if best_model_name in param_grids:
+    print(f"Performing Hyperparameters Tuning for {best_model_name}..........")
+
+    # Use appropriate data (scaled or unscaled)
+    if best_model_name in ["Linear Regression","Ridge Regression","Lasso Regression","ElasticNet","SVR","K-Neighbors"]:
+        X_tr,X_te = X_train_scaled,X_test_scaled
+
+    else:
+        X_tr,X_te = X_train,X_test
+
+
+    # Grid search with cross-validation
+    grid_search = GridSearchCV(
+        best_model,
+        param_grids[best_model_name],
+        cv=5,
+        scoring="neg_mean_squared_error",
+        n_jobs=-1,
+        verbose=1
+    )
+
+    grid_search.fit(X_tr,y_train)
+
+    # Get best model and parameters
+    tuned_model = grid_search.best_estimator_
+    best_params = grid_search.best_params_
+
+    # Make preddictions with tuned model
+    y_pred_tuned = tuned_model.predict(X_te)
+
+    # Calculate metrics for tuned model
+    mse_tuned = mean_squared_error(y_test,y_pred_tuned)
+    rmse_tuned = np.sqrt(mse_tuned)
+    r2_tuned = r2_score(y_test,y_pred_tuned)
+
+    print(f"Best Parameters: {best_params}")
+    print(f"Tuned Model RMSE: {rmse_tuned:.4f}")
+    print(f"Tuned Model R2 Score: {r2_tuned:.4f}")
+    print(f"Improvement in RMSE: {results[best_model_name]["rmse"] - rmse_tuned:.4f}")
+
+    # Update the best model
+    best_model = tuned_model
+
+else:
+    print(f"No Hyperparameter tuning defined for {best_model_name}")
+    tuned_model = best_model
+
+# %% [markdown]
+# Final Model Evaluation
+
+# %%
+# Make final predictions with the best (possibly tuned) model
+if best_model_name in ["Linear Regression","Ridge Regression","Lasso Regression","ElasticNet","SVR","K-Neighbors"]:
+    X_te_final = X_test_scaled
+else:
+    X_te_final = X_test
+
+final_predictions = best_model.predict(X_te_final)
+
+# %%
+# Calculate final metrics
+final_rmse = np.sqrt(mean_squared_error(y_test,final_predictions))
+final_r2 = r2_score(y_test,final_predictions)
+
+print("----- Final Model Performance -----")
+print(f"Best Model: {best_model_name}")
+print(f"Final RMSE: {final_rmse:.4f}")
+print(f"Final R2 Score: {final_r2:.4f}")
+
+# %% [markdown]
+# Final Model Visualization
+
+# %%
+# Create comprehensive visualization of final results
+fig,axes = plt.subplots(2,2,figsize=(15,12))
+
+# Plot the Actual vs Predicted Prices
+axes[0,0].scatter(y_test,final_predictions,alpha=0.6,color="blue")
+axes[0,0].plot([y_test.min(),y_test.max()],[y_test.min(),y_test.max()],"r--",lw=2)
+axes[0,0].set_xlabel("Actual Prices ($)")
+axes[0,0].set_ylabel("Predicted Prices ($)")
+axes[0,0].set_title(f"Actual vs Predicted - {best_model_name} R2 = {final_r2:.4f}")
+axes[0,0].grid(True,alpha=0.3)
+
+# Plot the time series of Actual vs Predicted
+test_dates = featured_data.index[-len(y_test):]
+axes[0,1].plot(test_dates,y_test.values,label="Actual",linewidth=2)
+axes[0,1].plot(test_dates,final_predictions,label="Predictions",linewidth=2,alpha=0.8)
+axes[0,1].set_xlabel("Date")
+axes[0,1].set_ylabel("Stock Price ($)")
+axes[0,1].set_title(f"Stock Price Prediction - {best_model_name}")
+axes[0,1].legend()
+axes[0,1].grid(True,alpha=0.3)
+plt.xticks(rotation=45)
+
+# Plot the Residuals
+residuals = y_test - final_predictions
+axes[1,0].scatter(final_predictions,residuals,alpha=0.6,color="green")
+axes[1,0].axhline(y=0,color="red",linestyle="--")
+axes[1,0].set_xlabel("Predicted Prices")
+axes[1,0].set_ylabel("Residuals")
+axes[1,0].set_title(f"Residual Plot - {best_model_name}")
+axes[1,0].grid(True,alpha=0.3)
+
+# Plot the Distribution of Residuals
+axes[1,1].hist(residuals,bins=30,color="orange",alpha=0.7,edgecolor="black")
+axes[1,1].axvline(x=0,color="red",linestyle="--",linewidth=2)
+axes[1,1].set_xlabel("Residuals")
+axes[1,1].set_ylabel("Frequency")
+axes[1,1].set_title(f"Distribution of Residuals \n Mean {residuals.mean():.4f},Std: {residuals.std():.4f}")
+axes[1,1].grid(True,alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# %%
+# Feature Importance 
+if hasattr(best_model,"feature_importances_"):
+    plt.Figure(figsize=(12,8))
+    feature_importance = pd.DataFrame({
+        "feature":feature_columns,
+        "importance":best_model.feature_importances_
+    }).sort_values("importance",ascending=False)
+
+
+    plt.barh(feature_importance["feature"],feature_importance["importance"])
+    plt.xlabel("Feature Importance")
+    plt.title(f"Feature Importance - {best_model_name}")
+    plt.grid(True,alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+# %% [markdown]
+# Prediction Interface for new data
+
+# %%
+def predict_stock_price(model,scaler,current_data):
+    """
+    Predict next day's stock price using the trained model
+    
+    Parameters:
+    model: Trained machine learning model
+    scaler: Fitted StandardScaler
+    current_data: Dictionary or array with current stock features
+    
+    Returns:
+    predicted_price: Predicted stock price for the next day
+    """
+
+
+    # Convert input to numpy array if it's a dictionary
+    if isinstance(current_data,dict):
+        input_features = np.array([current_data[col] for col in feature_columns]).reshape(1,-1)
+    else:
+        input_features = current_data.reshape(1,-1)
+
+
+    # Scale the features if needed
+    model_name = type(model).__name__
+    if model_name in ["LinearRegression","Ridge","Lasso","ElasticNet","SVR","KNeighborsRegressor"]:
+        input_features = scaler.transform(input_features)
+
+
+    # Make predictions
+    prediction = model.predict(input_features)
+
+
+    return prediction[0]
+
+# %%
+# Example usage with the lastest available data
+print("Prediction Interface")
+print("="*40)
+
+# Get the lastest data point from the test set
+latest_data = X_test.iloc[-1:].copy()
+
+
+# Create a sample input for prediction
+sample_input = {
+    "Open":latest_data["Open"].values[0],
+    "High":latest_data["High"].values[0],
+    "Low":latest_data["Low"].values[0],
+    "Volume":latest_data["Volume"].values[0],
+    "SMA_20":latest_data["SMA_20"].values[0],
+    "SMA_50":latest_data["SMA_50"].values[0],
+    "EMA_12":latest_data["EMA_12"].values[0],
+    "EMA_26":latest_data["EMA_26"].values[0],
+    "Volatility":latest_data["Volatility"].values[0],
+    "ROC":latest_data["ROC"].values[0],
+    "Pct_Change":latest_data["Pct_Change"].values[0],
+    "Close_Lag_1":latest_data["Close_Lag_1"].values[0],
+    "Close_Lag_5":latest_data["Close_Lag_5"].values[0],
+    "Close_Lag_10":latest_data["Close_Lag_10"].values[0],
+    "Volume_Change":latest_data["Volume_Change"].values[0]
+}
+
+'''# Make predictions
+predicted_price = predict_stock_price(best_model,scaler,sample_input)
+actual_next_price = y_test.iloc[-1]
+
+print(f"Predicted Next Day Price: ${predicted_price:.2f}")
+print(f"Actual Next Day Price: ${actual_next_price:.2f}")
+print(f"Prediction Error: ${abs(predicted_price - actual_next_price):.2f}")
+print(f"Percentage Error: {abs((predicted_price - actual_next_price) / actual_next_price *100):.2f}")'''
+
+
+'''# Convert to DataFrame with one row
+sample_df = pd.DataFrame([sample_input])
+
+# Make predictions
+X_scaled = scaler.transform
+predicted_price = best_model.predict(X_scaled)[0]
+actual_next_price = y_test.iloc[-1]
+
+print(f"Predicted Next Day Price: ${predicted_price:.2f}")
+print(f"Actual Next Day Price: ${actual_next_price:.2f}")
+print(f"Prediction Error: ${abs(predicted_price - actual_next_price):.2f}")
+print(f"Percentage Error: {abs((predicted_price - actual_next_price) / actual_next_price * 100):.2f}%")'''
+
+def predict_stock_price(model, scaler, input_data):
+    if isinstance(input_data, dict):
+        input_data = pd.DataFrame([input_data])
+    elif isinstance(input_data, pd.Series):
+        input_data = input_data.to_frame().T
+    X_scaled = scaler.transform(input_data)
+    return model.predict(X_scaled)[0]
+
+
+'''# Convert to DataFrame with correct column order
+sample_df = pd.DataFrame([sample_input])[X_train.columns]
+
+# Scale using the fitted scaler (2D array expected)
+X_scaled = scaler.transform(sample_df)
+
+# Make prediction
+predicted_price = best_model.predict(X_scaled)[0]
+actual_next_price = y_test.iloc[-1]
+
+# Print results
+print(f"Predicted Next Day Price: ${predicted_price:.2f}")
+print(f"Actual Next Day Price: ${actual_next_price:.2f}")
+print(f"Prediction Error: ${abs(predicted_price - actual_next_price):.2f}")
+print(f"Percentage Error: {abs((predicted_price - actual_next_price) / actual_next_price * 100):.2f}%")'''
+
+
+# %% [markdown]
+# Function for user input
+
+# %%
+def user_prediction_interface():
+    # Interactive interface for users to input their own data and get predictions
+    print("\n" + "="*50)
+    print("INTERACTIVE PREDICTION INTERFACE")
+    print("="*50)
+    print("Enter the following stock features for prediction:")
+
+    user_input = {}
+    for feature in feature_columns:
+        try:
+            value = float(input(f"{feature}:"))
+            user_input[feature] = value
+
+        except ValueError:
+            print(f"Invalid input for {feature}. Using default value 0.")
+            user_input[feature] = 0.0
+
+
+    prediction = predict_stock_price(best_model,scaler,user_input)
+    print(f"Predicted Next Day Stock Price: ${prediction:.2f}")
+
 
