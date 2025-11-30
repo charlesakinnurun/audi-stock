@@ -43,7 +43,7 @@
     - K-Nearest Neighbors
 - Model Training
     - Regression Model Performance Summary
-    
+
 | Model               | RMSE  | MAE  | R²      |
 |---------------------|-------|-------|----------|
 | Linear Regression    | 1.77 | 1.28 | 0.9128   |
@@ -121,13 +121,19 @@ bank-of-america-stock/
 │
 ├── model.ipynb  
 |── model.py    
-|── BAC_stock_data.csv  
+|── data.csv  
 ├── requirements.txt 
 ├── image.jpg    
 ├── output1.png
-├── output2.png          
+├── output2.png   
+├── output3.png
+├── output4.png
+├── output5.png
+├── output6.png
+├── output7.png       
 ├── CONTRIBUTING.md    
 ├── CODE_OF_CONDUCT.md 
+├── SECURITY.md
 ├── LICENSE
 └── README.md          
 
